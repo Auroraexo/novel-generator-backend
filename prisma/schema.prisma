@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id             String    @id @default(uuid())
+  genre          String
+  subgenre       String
+  inspiration    String
+  targetChapters Int       @default(12)
+  targetWords    Int       @default(2000)
+  status         String    @default("draft")
+  setting        Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  outlines       Outline[]
+  chapters       Chapter[]
+  memory         Memory?
+}
+
+model Outline {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  index     Int
+  title     String
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, index])
+}
+
+model Chapter {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  index     Int
+  content   String
+  wordCount Int
+  version   Int      @default(1)
+  summary   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, index])
+}
+
+model Memory {
+  id                String   @id @default(uuid())
+  projectId         String   @unique
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cumulativeSummary String   @default("")
+  foreshadowing     Json     @default("[]")
+  characterStates   Json     @default("{}")
+  updatedAt         DateTime @updatedAt
+}
