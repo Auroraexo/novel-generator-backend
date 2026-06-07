@@ -33,10 +33,10 @@ export class GenerationProcessor extends WorkerHost {
         case 'generate-full':
           return await this.handleFull(projectId);
         default:
-          throw new Error(`Unknown job type: ${job.name}`);
+          throw new Error(`未知的任务类型：${job.name}`);
       }
     } catch (error) {
-      this.logger.error(`Job ${job.name} failed: ${error.message}`);
+      this.logger.error(`任务 ${job.name} 失败：${error.message}`);
       this.generationService.emit({
         projectId,
         type: 'error',

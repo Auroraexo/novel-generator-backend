@@ -39,7 +39,7 @@ export class OutlineService {
     });
 
     if (!project.setting) {
-      throw new Error('Project setting must be generated first');
+      throw new Error('必须先生成项目设定');
     }
 
     const systemPrompt = this.prompt.getSystemPrompt();
@@ -57,7 +57,7 @@ export class OutlineService {
 
     if (outlines.length !== project.targetChapters) {
       this.logger.warn(
-        `Expected ${project.targetChapters} chapters, got ${outlines.length}`,
+        `期望 ${project.targetChapters} 章，实际 ${outlines.length} 章`,
       );
     }
 
@@ -77,7 +77,7 @@ export class OutlineService {
       data: { status: 'outline' },
     });
 
-    this.logger.log(`Outline generated for project ${projectId}: ${outlines.length} chapters`);
+    this.logger.log(`项目 ${projectId} 的章纲已生成：${outlines.length} 章`);
     return outlines;
   }
 

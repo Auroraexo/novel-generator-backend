@@ -63,14 +63,14 @@ export class LlmService {
       } catch (err) {
         lastError = err as Error;
         this.logger.warn(
-          `JSON generation attempt ${attempt + 1} failed: ${lastError.message}`,
+          `JSON 生成第 ${attempt + 1} 次尝试失败：${lastError.message}`,
         );
         currentTemp = Math.max(0.1, currentTemp - 0.2);
       }
     }
 
     throw new Error(
-      `Failed to generate valid JSON after ${maxRetries + 1} attempts: ${lastError?.message}`,
+      `经过 ${maxRetries + 1} 次尝试仍无法生成有效 JSON：${lastError?.message}`,
     );
   }
 
@@ -123,7 +123,7 @@ export class LlmService {
         return response.choices[0]?.message?.content || '';
       } catch (err) {
         if (attempt < maxRetries) {
-          this.logger.warn(`LLM call attempt ${attempt + 1} failed, retrying...`);
+          this.logger.warn(`LLM 调用第 ${attempt + 1} 次失败，正在重试...`);
           await this.sleep(delays[attempt]);
         } else {
           throw err;
@@ -131,7 +131,7 @@ export class LlmService {
       }
     }
 
-    throw new Error('Unreachable');
+    throw new Error('不可达代码');
   }
 
   private extractJson(text: string): string {

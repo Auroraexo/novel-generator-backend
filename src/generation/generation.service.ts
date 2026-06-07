@@ -19,22 +19,22 @@ export class GenerationService {
 
   async startFullGeneration(projectId: string) {
     await this.queue.add('generate-full', { projectId });
-    return { message: 'Generation job queued', projectId };
+    return { message: '生成任务已加入队列', projectId };
   }
 
   async startSettingGeneration(projectId: string) {
     await this.queue.add('generate-setting', { projectId });
-    return { message: 'Setting generation queued', projectId };
+    return { message: '设定生成已加入队列', projectId };
   }
 
   async startOutlineGeneration(projectId: string) {
     await this.queue.add('generate-outline', { projectId });
-    return { message: 'Outline generation queued', projectId };
+    return { message: '章纲生成已加入队列', projectId };
   }
 
   async startChapterGeneration(projectId: string, index: number) {
     await this.queue.add('generate-chapter', { projectId, index });
-    return { message: `Chapter ${index} generation queued`, projectId };
+    return { message: `第 ${index} 章生成已加入队列`, projectId };
   }
 
   getEventStream(projectId: string): Subject<GenerationEvent> {

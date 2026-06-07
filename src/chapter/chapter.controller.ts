@@ -16,7 +16,7 @@ export class ChapterController {
   @Post('generate-all')
   generateAll(@Param('projectId') projectId: string) {
     this.chapterService.generateAll(projectId);
-    return { message: 'Generation started' };
+    return { message: '生成任务已开始' };
   }
 
   @Post(':index/rewrite')

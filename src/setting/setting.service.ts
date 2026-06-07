@@ -110,7 +110,7 @@ export class SettingService {
       data: { setting: setting as any, status: 'setting' },
     });
 
-    this.logger.log(`Setting generated for project ${projectId}: ${setting.title}`);
+    this.logger.log(`项目 ${projectId} 的设定已生成：${setting.title}`);
     return setting;
   }
 }

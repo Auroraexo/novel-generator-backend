@@ -74,7 +74,7 @@ export class SummaryService {
 
     await this.updateCumulativeSummary(projectId, index);
 
-    this.logger.log(`Summary generated for chapter ${index}`);
+    this.logger.log(`第 ${index} 章摘要已生成`);
     return summary;
   }
 

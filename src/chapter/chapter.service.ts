@@ -29,7 +29,7 @@ export class ChapterService {
 
     const currentOutline = project.outlines.find((o) => o.index === index);
     if (!currentOutline) {
-      throw new Error(`Outline for chapter ${index} not found`);
+      throw new Error(`未找到第 ${index} 章的章纲`);
     }
 
     const ctx = await this.buildContext(project, index);
@@ -40,7 +40,7 @@ export class ChapterService {
     let content = await this.llm.generate(systemPrompt, userPrompt, {
       temperature: 0.85,
       topP: 0.92,
-      maxTokens: 4000,
+      maxTokens: 16000,
     });
 
     content = await this.adjustWordCount(content, project.targetWords);
@@ -55,7 +55,7 @@ export class ChapterService {
 
     await this.summary.generateForChapter(projectId, index, content);
 
-    this.logger.log(`Chapter ${index} generated: ${wordCount} words`);
+    this.logger.log(`第 ${index} 章已生成：${wordCount} 字`);
     return content;
   }
 
@@ -101,7 +101,7 @@ export class ChapterService {
 
     const existingChapter = project.chapters.find((c) => c.index === index);
     if (!existingChapter) {
-      throw new Error(`Chapter ${index} does not exist yet`);
+      throw new Error(`第 ${index} 章尚未生成`);
     }
 
     const ctx = await this.buildContext(project, index);
@@ -116,7 +116,7 @@ export class ChapterService {
     let content = await this.llm.generate(systemPrompt, userPrompt, {
       temperature: 0.85,
       topP: 0.92,
-      maxTokens: 4000,
+      maxTokens: 16000,
     });
 
     content = await this.adjustWordCount(content, project.targetWords);
@@ -180,20 +180,20 @@ export class ChapterService {
     const upperBound = targetWords * 1.15;
 
     if (wordCount < lowerBound) {
-      this.logger.warn(`Chapter too short (${wordCount}/${targetWords}), expanding...`);
+      this.logger.warn(`章节字数过少（${wordCount}/${targetWords}），正在扩写...`);
       const systemPrompt = this.prompt.getSystemPrompt();
       const userPrompt = this.prompt.buildExpandPrompt(content, targetWords);
       content = await this.llm.generate(systemPrompt, userPrompt, {
         temperature: 0.8,
-        maxTokens: 4000,
+        maxTokens: 16000,
       });
     } else if (wordCount > upperBound) {
-      this.logger.warn(`Chapter too long (${wordCount}/${targetWords}), trimming...`);
+      this.logger.warn(`章节字数过多（${wordCount}/${targetWords}），正在精简...`);
       const systemPrompt = this.prompt.getSystemPrompt();
       const userPrompt = this.prompt.buildTrimPrompt(content, targetWords);
       content = await this.llm.generate(systemPrompt, userPrompt, {
         temperature: 0.3,
-        maxTokens: 4000,
+        maxTokens: 16000,
       });
     }
 
