@@ -30,6 +30,11 @@ export class GenerationProcessor extends WorkerHost {
           return await this.handleOutline(projectId);
         case 'generate-chapter':
           return await this.handleChapter(projectId, job.data.index);
+        case 'generate-all-chapters':
+          return await this.handleAllChapters(
+            projectId,
+            job.data.skipExisting ?? false,
+          );
         case 'generate-full':
           return await this.handleFull(projectId);
         default:
@@ -83,21 +88,99 @@ export class GenerationProcessor extends WorkerHost {
   }
 
   private async handleChapter(projectId: string, index: number) {
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    const project = await prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      include: { outlines: true },
+    });
+    await prisma.$disconnect();
+
     this.generationService.emit({
       projectId,
       type: 'progress',
-      data: { stage: 'chapter', message: `正在生成第 ${index} 章...`, index },
+      data: {
+        stage: 'chapter',
+        message: `正在生成第 ${index} 章...`,
+        index,
+        total: project.outlines.length,
+      },
     });
 
     const content = await this.chapterService.generate(projectId, index);
+    const wordCount = content.replace(/\s/g, '').length;
 
     this.generationService.emit({
       projectId,
       type: 'chapter-complete',
-      data: { index, wordCount: content.replace(/\s/g, '').length },
+      data: { index, total: project.outlines.length, wordCount },
+    });
+
+    this.generationService.emit({
+      projectId,
+      type: 'done',
+      data: { message: `第 ${index} 章生成完成`, index },
     });
 
     return content;
+  }
+
+  private async handleAllChapters(projectId: string, skipExisting: boolean) {
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    const project = await prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      include: {
+        outlines: { orderBy: { index: 'asc' } },
+        chapters: true,
+      },
+    });
+    await prisma.$disconnect();
+
+    const existingIndexes = new Set(project.chapters.map((c) => c.index));
+    const targets = skipExisting
+      ? project.outlines.filter((o) => !existingIndexes.has(o.index))
+      : project.outlines;
+
+    if (targets.length === 0) {
+      this.generationService.emit({
+        projectId,
+        type: 'done',
+        data: { message: '没有需要生成的章节' },
+      });
+      return;
+    }
+
+    this.generationService.emit({
+      projectId,
+      type: 'progress',
+      data: {
+        stage: 'chapters',
+        message: skipExisting
+          ? `开始生成剩余 ${targets.length} 章...`
+          : `开始生成全部 ${targets.length} 章...`,
+        total: project.outlines.length,
+        pending: targets.length,
+      },
+    });
+
+    await this.chapterService.generateAll(
+      projectId,
+      { skipExisting },
+      (index, total) => {
+        this.generationService.emit({
+          projectId,
+          type: 'chapter-complete',
+          data: { index, total },
+        });
+      },
+    );
+
+    this.generationService.emit({
+      projectId,
+      type: 'done',
+      data: { message: '章节批量生成完成' },
+    });
   }
 
   private async handleFull(projectId: string) {

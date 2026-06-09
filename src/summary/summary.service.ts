@@ -6,20 +6,30 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MemoryService } from '../memory/memory.service';
 
 const SummarySchema = z.object({
-  index: z.number(),
-  one_line_summary: z.string(),
-  key_facts: z.array(z.string()),
-  character_state_changes: z.array(
-    z.object({ name: z.string(), change: z.string() }),
-  ),
-  new_foreshadowing: z.array(z.string()),
-  resolved_foreshadowing: z.array(z.string()),
-  world_state_delta: z.string().nullable(),
-  emotional_residue: z.string(),
-  next_chapter_setup: z.string(),
+  index: z.number().optional(),
+  one_line_summary: z.string().default(''),
+  key_facts: z.array(z.string()).default([]),
+  character_state_changes: z
+    .array(z.object({ name: z.string(), change: z.string() }))
+    .default([]),
+  new_foreshadowing: z.array(z.string()).default([]),
+  resolved_foreshadowing: z.array(z.string()).default([]),
+  world_state_delta: z.string().nullable().default(null),
+  emotional_residue: z.string().default(''),
+  next_chapter_setup: z.string().default(''),
 });
 
-export type ChapterSummary = z.infer<typeof SummarySchema>;
+export type ChapterSummary = {
+  index: number;
+  one_line_summary: string;
+  key_facts: string[];
+  character_state_changes: { name: string; change: string }[];
+  new_foreshadowing: string[];
+  resolved_foreshadowing: string[];
+  world_state_delta: string | null;
+  emotional_residue: string;
+  next_chapter_setup: string;
+};
 
 @Injectable()
 export class SummaryService {
@@ -51,31 +61,43 @@ export class SummaryService {
     const summary = await this.llm.generateJson(
       systemPrompt,
       userPrompt,
-      { temperature: 0.3, topP: 0.8, maxTokens: 800 },
+      { temperature: 0.3, topP: 0.8, maxTokens: 2000 },
       SummarySchema,
     );
 
+    const normalized: ChapterSummary = {
+      index: summary.index ?? index,
+      one_line_summary: summary.one_line_summary ?? '',
+      key_facts: summary.key_facts ?? [],
+      character_state_changes: summary.character_state_changes ?? [],
+      new_foreshadowing: summary.new_foreshadowing ?? [],
+      resolved_foreshadowing: summary.resolved_foreshadowing ?? [],
+      world_state_delta: summary.world_state_delta ?? null,
+      emotional_residue: summary.emotional_residue ?? '',
+      next_chapter_setup: summary.next_chapter_setup ?? '',
+    };
+
     await this.prisma.chapter.update({
       where: { projectId_index: { projectId, index } },
-      data: { summary: summary as any },
+      data: { summary: normalized as any },
     });
 
-    for (const f of summary.new_foreshadowing) {
+    for (const f of normalized.new_foreshadowing) {
       await this.memory.addForeshadowing(projectId, f, index);
     }
 
-    for (const f of summary.resolved_foreshadowing) {
+    for (const f of normalized.resolved_foreshadowing) {
       await this.memory.resolveForeshadowing(projectId, f);
     }
 
-    for (const change of summary.character_state_changes) {
+    for (const change of normalized.character_state_changes) {
       await this.memory.updateCharacterState(projectId, change.name, change.change);
     }
 
     await this.updateCumulativeSummary(projectId, index);
 
     this.logger.log(`第 ${index} 章摘要已生成`);
-    return summary;
+    return normalized;
   }
 
   private async updateCumulativeSummary(projectId: string, currentIndex: number) {

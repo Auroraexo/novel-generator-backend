@@ -127,6 +127,101 @@ ${pacing}
 ]`;
   }
 
+  buildOutlineBatchPrompt(
+    settingJson: string,
+    targetChapters: number,
+    startIndex: number,
+    endIndex: number,
+    previousOutlinesJson?: string,
+  ): string {
+    const pacing = this.getPacingTemplate(targetChapters);
+    const count = endIndex - startIndex + 1;
+    const previousSection = previousOutlinesJson
+      ? `\n【已生成的前文章纲】\n${previousOutlinesJson}\n`
+      : '';
+
+    return `【任务】
+基于以下故事设定，生成第 ${startIndex} 至第 ${endIndex} 章（共 ${count} 章）的章纲。
+${previousSection}
+【故事设定】
+${settingJson}
+
+【节奏要求】
+${pacing}
+
+【强制要求】
+1. 必须输出 ${count} 章，index 从 ${startIndex} 到 ${endIndex}，不多不少
+2. 每章末尾必须留钩子（悬念/反转/情绪爆点）
+3. 主线冲突必须贯穿，每章至少推进一次
+4. 与已生成的前文章纲保持因果连续，不得矛盾
+5. 不要在章纲里写出完整对话，只写情节走向
+6. 字符串内容禁止出现英文双引号 "，禁止中文引号「」""，只输出合法 JSON
+7. 只输出 JSON 数组，不要 Markdown 代码块或任何解释文字
+
+【输出格式】严格按以下 JSON 数组输出，每个元素为一章：
+
+[
+  {
+    "index": ${startIndex},
+    "title": "章节标题（8-15 字，有画面感或悬念）",
+    "scene": "主场景（一句话，时间+地点）",
+    "characters": ["出场角色 1", "角色 2"],
+    "goal": "本章主角想要达成的目标",
+    "conflict": "本章冲突点（与谁/与什么对抗）",
+    "key_events": ["关键事件 1", "关键事件 2", "关键事件 3"],
+    "emotional_beat": "本章情绪基调",
+    "payoff": "本章爽点 / 信息揭示 / 情感推进（至少 1 个）",
+    "ending_hook": "章末钩子（具体描述，必须能引导读者读下一章）",
+    "foreshadowing": ["埋下的伏笔（可空数组）"],
+    "callback": ["回收的伏笔（前几章埋的，可空数组）"]
+  }
+]`;
+  }
+
+  buildOutlineSinglePrompt(
+    settingJson: string,
+    targetChapters: number,
+    index: number,
+    previousOutlinesJson?: string,
+  ): string {
+    const pacing = this.getPacingTemplate(targetChapters);
+    const previousSection = previousOutlinesJson
+      ? `\n【已生成的前文章纲】\n${previousOutlinesJson}\n`
+      : '';
+
+    return `【任务】
+基于以下故事设定，仅生成第 ${index} 章（全篇共 ${targetChapters} 章）的章纲。
+${previousSection}
+【故事设定】
+${settingJson}
+
+【节奏要求】
+${pacing}
+
+【强制要求】
+1. index 必须为 ${index}
+2. 与已生成的前文章纲保持因果连续
+3. 章末必须留钩子
+4. 字符串内容禁止出现英文双引号 "，禁止中文引号，只输出合法 JSON
+5. 只输出单个 JSON 对象，不要数组、不要 Markdown、不要解释
+
+【输出格式】
+{
+  "index": ${index},
+  "title": "章节标题",
+  "scene": "主场景",
+  "characters": ["角色 1", "角色 2"],
+  "goal": "本章目标",
+  "conflict": "本章冲突",
+  "key_events": ["事件 1", "事件 2", "事件 3"],
+  "emotional_beat": "情绪基调",
+  "payoff": "本章爽点",
+  "ending_hook": "章末钩子",
+  "foreshadowing": [],
+  "callback": []
+}`;
+  }
+
   buildOutlineRegeneratePrompt(
     settingJson: string,
     fullOutline: string,
@@ -229,24 +324,18 @@ ${chapterContent}
 【本章蓝图】
 ${outlineJson}
 
-【输出格式】严格按以下 JSON 结构，不要添加解释：
+【输出格式】严格按以下 JSON 结构输出，所有字段必须存在（无内容时用 [] 或 null 或空字符串），只输出 JSON：
 
 {
   "index": ${index},
   "one_line_summary": "一句话概括本章（30 字内）",
-  "key_facts": [
-    "本章发生的关键事实 1（影响后续剧情的）",
-    "事实 2",
-    "事实 3"
-  ],
-  "character_state_changes": [
-    {"name": "角色名", "change": "状态/关系/认知发生的变化"}
-  ],
-  "new_foreshadowing": ["本章新埋的伏笔"],
-  "resolved_foreshadowing": ["本章回收的伏笔"],
-  "world_state_delta": "世界观/格局发生的变化（无则填 null）",
-  "emotional_residue": "本章留给读者的情绪余韵",
-  "next_chapter_setup": "为下一章铺垫的关键状态"
+  "key_facts": ["关键事实 1", "事实 2"],
+  "character_state_changes": [{"name": "角色名", "change": "变化描述"}],
+  "new_foreshadowing": [],
+  "resolved_foreshadowing": [],
+  "world_state_delta": null,
+  "emotional_residue": "情绪余韵",
+  "next_chapter_setup": "下一章铺垫"
 }`;
   }
 

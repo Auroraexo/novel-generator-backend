@@ -53,7 +53,13 @@ export class ChapterService {
       update: { content, wordCount, version: { increment: 1 } },
     });
 
-    await this.summary.generateForChapter(projectId, index, content);
+    try {
+      await this.summary.generateForChapter(projectId, index, content);
+    } catch (err) {
+      this.logger.warn(
+        `第 ${index} 章摘要生成失败，正文已保存：${(err as Error).message}`,
+      );
+    }
 
     this.logger.log(`第 ${index} 章已生成：${wordCount} 字`);
     return content;
@@ -61,21 +67,38 @@ export class ChapterService {
 
   async generateAll(
     projectId: string,
+    options: { skipExisting?: boolean } = {},
     onProgress?: (index: number, total: number) => void,
   ): Promise<void> {
     const project = await this.prisma.project.findUniqueOrThrow({
       where: { id: projectId },
-      include: { outlines: { orderBy: { index: 'asc' } } },
+      include: {
+        outlines: { orderBy: { index: 'asc' } },
+        chapters: { orderBy: { index: 'asc' } },
+      },
     });
+
+    const existingIndexes = new Set(project.chapters.map((c) => c.index));
+    const targets = options.skipExisting
+      ? project.outlines.filter((o) => !existingIndexes.has(o.index))
+      : project.outlines;
+
+    if (targets.length === 0) {
+      this.logger.log(`项目 ${projectId} 无需生成新章节`);
+      return;
+    }
 
     await this.prisma.project.update({
       where: { id: projectId },
       data: { status: 'writing' },
     });
 
-    for (const outline of project.outlines) {
+    const total = project.outlines.length;
+
+    for (const outline of targets) {
+      this.logger.log(`正在生成第 ${outline.index}/${total} 章...`);
       await this.generate(projectId, outline.index);
-      onProgress?.(outline.index, project.outlines.length);
+      onProgress?.(outline.index, total);
     }
 
     await this.prisma.project.update({

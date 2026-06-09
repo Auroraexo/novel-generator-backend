@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { jsonrepair } from 'jsonrepair';
 import { ZodSchema } from 'zod';
 
 export interface LlmParams {
@@ -57,8 +58,7 @@ export class LlmService {
           maxTokens: params.maxTokens ?? 4000,
         });
 
-        const jsonStr = this.extractJson(raw);
-        const parsed = JSON.parse(jsonStr);
+        const parsed = this.parseJson(raw);
         return schema.parse(parsed);
       } catch (err) {
         lastError = err as Error;
@@ -132,6 +132,29 @@ export class LlmService {
     }
 
     throw new Error('不可达代码');
+  }
+
+  private parseJson(text: string): unknown {
+    const extracted = this.normalizeJson(this.extractJson(text));
+
+    try {
+      return JSON.parse(extracted);
+    } catch (firstError) {
+      try {
+        return JSON.parse(jsonrepair(extracted));
+      } catch {
+        throw firstError;
+      }
+    }
+  }
+
+  private normalizeJson(text: string): string {
+    return text
+      .replace(/[\u201c\u201d\u201e\u00ab\u00bb\uff02]/g, '"')
+      .replace(/[\u2018\u2019\uff07]/g, "'")
+      .replace(/[\u2014\u2013]/g, '-')
+      .replace(/,\s*([\]}])/g, '$1')
+      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
   }
 
   private extractJson(text: string): string {

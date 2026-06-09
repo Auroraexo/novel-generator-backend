@@ -19,9 +19,9 @@ const OutlineItemSchema = z.object({
   callback: z.array(z.string()),
 });
 
-const OutlineArraySchema = z.array(OutlineItemSchema);
-
 export type OutlineItem = z.infer<typeof OutlineItemSchema>;
+
+const OUTLINE_BATCH_SIZE = 2;
 
 @Injectable()
 export class OutlineService {
@@ -42,18 +42,40 @@ export class OutlineService {
       throw new Error('必须先生成项目设定');
     }
 
+    const settingJson = JSON.stringify(project.setting, null, 2);
     const systemPrompt = this.prompt.getSystemPrompt();
-    const userPrompt = this.prompt.buildOutlinePrompt(
-      JSON.stringify(project.setting, null, 2),
-      project.targetChapters,
-    );
+    const outlines: OutlineItem[] = [];
 
-    const outlines = await this.llm.generateJson(
-      systemPrompt,
-      userPrompt,
-      { temperature: 0.8, topP: 0.9, maxTokens: 4000 },
-      OutlineArraySchema,
-    );
+    for (
+      let start = 1;
+      start <= project.targetChapters;
+      start += OUTLINE_BATCH_SIZE
+    ) {
+      const end = Math.min(
+        start + OUTLINE_BATCH_SIZE - 1,
+        project.targetChapters,
+      );
+      const batchCount = end - start + 1;
+
+      this.logger.log(`正在生成第 ${start}-${end} 章章纲...`);
+
+      const batch = await this.generateBatchRange(
+        systemPrompt,
+        settingJson,
+        project.targetChapters,
+        start,
+        end,
+        outlines,
+      );
+
+      if (batch.length !== batchCount) {
+        this.logger.warn(
+          `第 ${start}-${end} 章期望 ${batchCount} 章，实际 ${batch.length} 章`,
+        );
+      }
+
+      outlines.push(...batch);
+    }
 
     if (outlines.length !== project.targetChapters) {
       this.logger.warn(
@@ -79,6 +101,83 @@ export class OutlineService {
 
     this.logger.log(`项目 ${projectId} 的章纲已生成：${outlines.length} 章`);
     return outlines;
+  }
+
+  private async generateBatchRange(
+    systemPrompt: string,
+    settingJson: string,
+    targetChapters: number,
+    start: number,
+    end: number,
+    previousOutlines: OutlineItem[],
+  ): Promise<OutlineItem[]> {
+    const batchCount = end - start + 1;
+    const userPrompt = this.prompt.buildOutlineBatchPrompt(
+      settingJson,
+      targetChapters,
+      start,
+      end,
+      previousOutlines.length > 0
+        ? JSON.stringify(previousOutlines, null, 2)
+        : undefined,
+    );
+
+    try {
+      return await this.llm.generateJson(
+        systemPrompt,
+        userPrompt,
+        {
+          temperature: 0.5,
+          topP: 0.85,
+          maxTokens: batchCount * 1800 + 800,
+        },
+        z.array(OutlineItemSchema),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `第 ${start}-${end} 章批量生成失败，改为逐章生成：${(err as Error).message}`,
+      );
+
+      const items: OutlineItem[] = [];
+      for (let index = start; index <= end; index++) {
+        items.push(
+          await this.generateSingleChapter(
+            systemPrompt,
+            settingJson,
+            targetChapters,
+            index,
+            [...previousOutlines, ...items],
+          ),
+        );
+      }
+      return items;
+    }
+  }
+
+  private async generateSingleChapter(
+    systemPrompt: string,
+    settingJson: string,
+    targetChapters: number,
+    index: number,
+    previousOutlines: OutlineItem[],
+  ): Promise<OutlineItem> {
+    this.logger.log(`正在逐章生成第 ${index} 章章纲...`);
+
+    const userPrompt = this.prompt.buildOutlineSinglePrompt(
+      settingJson,
+      targetChapters,
+      index,
+      previousOutlines.length > 0
+        ? JSON.stringify(previousOutlines, null, 2)
+        : undefined,
+    );
+
+    return this.llm.generateJson(
+      systemPrompt,
+      userPrompt,
+      { temperature: 0.4, topP: 0.85, maxTokens: 1200 },
+      OutlineItemSchema,
+    );
   }
 
   async regenerateChapter(
