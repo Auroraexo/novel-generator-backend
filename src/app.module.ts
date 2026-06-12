@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
 import { LlmModule } from './llm/llm.module';
@@ -15,11 +15,20 @@ import { GenerationModule } from './generation/generation.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST || '107.173.156.235',
-        port: parseInt(process.env.REDIS_PORT || '16379', 10),
-      },
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          host: config.get<string>('REDIS_HOST', '127.0.0.1'),
+          port: parseInt(config.get<string>('REDIS_PORT', '6379'), 10),
+          password: config.get<string>('REDIS_PASSWORD') || undefined,
+          connectTimeout: 30_000,
+          maxRetriesPerRequest: null,
+          retryStrategy: (times: number) =>
+            times > 20 ? null : Math.min(times * 500, 5_000),
+        },
+      }),
     }),
     PrismaModule,
     LlmModule,
